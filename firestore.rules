@@ -1,0 +1,175 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId
+    // Fields:
+    //   - userId: string (required)
+    //   - name: string (required)
+    //   - contact: string (required)
+    //   - role: string (required, 'admin' or 'user')
+    //
+    // Collection: results
+    // Document ID: auto-generated
+    // Fields:
+    //   - userId: string (required)
+    //   - name: string (required)
+    //   - score: number (required)
+    //   - totalQuestions: number (required)
+    //   - correctAnswers: number (required)
+    //   - wrongAnswers: number (required)
+    //   - createdAt: string (required)
+    //
+    // Collection: content
+    // Document ID: auto-generated
+    // Fields:
+    //   - type: string (required, 'ad', 'pdf', 'note', 'paper')
+    //   - title: string (required)
+    //   - description: string (optional)
+    //   - url: string (required)
+    //   - createdAt: string (required)
+    //
+    // Collection: certificates
+    // Document ID: auto-generated
+    // Fields:
+    //   - userId: string (required)
+    //   - title: string (required)
+    //   - url: string (required)
+    //   - createdAt: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "adityadake627@gmail.com" && request.auth.token.email_verified == true)); // Default admin
+    }
+
+    function isStaff() {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'staff';
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['userId', 'name', 'contact', 'role', 'customId', 'createdAt', 'lastLogin']) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.contact is string && data.contact.size() > 0 && data.contact.size() < 100 &&
+             data.role in ['admin', 'user', 'staff'] &&
+             (!('customId' in data) || data.customId is string) &&
+             (!('createdAt' in data) || data.createdAt is string) &&
+             (!('lastLogin' in data) || data.lastLogin is string);
+    }
+
+    function isValidUserResult(data) {
+      return hasOnlyAllowedFields(['userId', 'name', 'score', 'totalQuestions', 'correctAnswers', 'wrongAnswers', 'createdAt']) &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.score is number &&
+             data.totalQuestions is number && data.totalQuestions >= 0 &&
+             data.correctAnswers is number && data.correctAnswers >= 0 &&
+             data.wrongAnswers is number && data.wrongAnswers >= 0 &&
+             data.createdAt is string;
+    }
+
+    function isValidContent(data) {
+      return data.keys().hasAll(['type', 'title', 'url', 'createdAt']) &&
+             data.type in ['ad', 'pdf', 'note', 'paper', 'video'] &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.url is string && data.url.size() > 0 && data.url.size() < 1000 &&
+             data.createdAt is string;
+    }
+
+    function isValidCertificate(data) {
+      return hasOnlyAllowedFields(['userId', 'title', 'url', 'createdAt']) &&
+             data.userId is string && data.userId.size() > 0 &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.url is string && data.url.size() > 0 && data.url.size() < 1000 &&
+             data.createdAt is string;
+    }
+
+    function isValidQuestion(data) {
+      return hasOnlyAllowedFields(['text', 'options', 'correctAnswerIndex', 'createdAt']) &&
+             data.text is string && data.text.size() > 0 && data.text.size() < 1000 &&
+             data.options is list && data.options.size() == 4 &&
+             data.options[0] is string && data.options[0].size() > 0 && data.options[0].size() < 200 &&
+             data.options[1] is string && data.options[1].size() > 0 && data.options[1].size() < 200 &&
+             data.options[2] is string && data.options[2].size() > 0 && data.options[2].size() < 200 &&
+             data.options[3] is string && data.options[3].size() > 0 && data.options[3].size() < 200 &&
+             data.correctAnswerIndex is number && data.correctAnswerIndex >= 0 && data.correctAnswerIndex <= 3 &&
+             data.createdAt is string;
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin() || isStaff();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && request.resource.data.role in ['user', 'staff']) || isAdmin());
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && ((isOwner(userId) && (request.resource.data.role == resource.data.role || request.resource.data.role == 'staff')) || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /metadata/counters {
+      allow read, write: if isAuthenticated();
+    }
+
+    match /staff_invites/{inviteId} {
+      allow read, delete: if isAuthenticated();
+      allow create, update: if isAdmin();
+    }
+
+    match /results/{resultId} {
+      allow read: if isAuthenticated(); // Anyone authenticated can read for leaderboard
+      allow create: if isAuthenticated() && isValidUserResult(request.resource.data);
+      allow update: if false; // Results are immutable
+      allow delete: if isAdmin();
+    }
+
+    match /live_classes/{classId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() || isStaff();
+      allow delete: if isAdmin() || isStaff();
+    }
+
+    match /content/{contentId} {
+      allow read: if isAuthenticated();
+      allow create, update: if (isAdmin() || isStaff()) && isValidContent(request.resource.data);
+      allow delete: if isAdmin() || isStaff();
+    }
+
+    match /certificates/{certificateId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin() || isStaff());
+      allow create, update: if (isAdmin() || isStaff()) && isValidCertificate(request.resource.data);
+      allow delete: if isAdmin() || isStaff();
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isAdmin() || isStaff();
+    }
+
+    match /questions/{questionId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin() && isValidQuestion(request.resource.data);
+      allow delete: if isAdmin();
+    }
+  }
+}

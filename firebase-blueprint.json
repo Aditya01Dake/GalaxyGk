@@ -1,0 +1,74 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user profile and role.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "contact": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] }
+      },
+      "required": ["userId", "name", "contact", "role"]
+    },
+    "UserResult": {
+      "title": "User Result",
+      "description": "Stores the quiz result of a user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "score": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "correctAnswers": { "type": "number" },
+        "wrongAnswers": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "score", "totalQuestions", "correctAnswers", "wrongAnswers", "createdAt"]
+    },
+    "Content": {
+      "title": "App Content",
+      "description": "Stores ads, pdfs, notes, and papers.",
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "enum": ["ad", "pdf", "note", "paper"] },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "url": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["type", "title", "url", "createdAt"]
+    },
+    "Certificate": {
+      "title": "User Certificate",
+      "description": "Stores certificates assigned to users.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "url": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "title", "url", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Collection of user profiles."
+    },
+    "/results/{resultId}": {
+      "schema": { "$ref": "#/entities/UserResult" },
+      "description": "Collection of user quiz results."
+    },
+    "/content/{contentId}": {
+      "schema": { "$ref": "#/entities/Content" },
+      "description": "Collection of app content like ads, pdfs, notes."
+    },
+    "/certificates/{certificateId}": {
+      "schema": { "$ref": "#/entities/Certificate" },
+      "description": "Collection of user certificates."
+    }
+  }
+}
